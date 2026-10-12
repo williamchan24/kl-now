@@ -1,13 +1,32 @@
 import { describe, expect, it } from 'vitest';
-import { formatDuration, formatHour, isoToHour, klHour, shortHour } from './time';
+import { cityHour, formatDuration, formatHour, isoToHour, REF_SUNRISE, REF_SUNSET, shortHour, solarHour } from './time';
+import { CITIES, cityById } from './cities';
 import { aqiBand, kindFromCode, labelFromCode, uvLabel } from './conditions';
 import { demoWeather, parseWeather } from './weather';
 
 describe('time', () => {
-  it('reads KL time regardless of the visitor’s timezone', () => {
+  it('reads each city’s time regardless of the visitor’s timezone', () => {
     // 2026-10-12 11:30 UTC = 7:30 pm in KL (UTC+8)
-    expect(klHour(new Date('2026-10-12T11:30:00Z'))).toBeCloseTo(19.5, 5);
-    expect(klHour(new Date('2026-10-12T16:05:00Z'))).toBeCloseTo(0 + 5 / 60, 5); // just after midnight
+    expect(cityHour('Asia/Kuala_Lumpur', new Date('2026-10-12T11:30:00Z'))).toBeCloseTo(19.5, 5);
+    expect(cityHour('Asia/Kuala_Lumpur', new Date('2026-10-12T16:05:00Z'))).toBeCloseTo(5 / 60, 5); // just after midnight
+    // Melbourne is on daylight saving in October (UTC+11): 11:30 UTC = 10:30 pm
+    expect(cityHour('Australia/Melbourne', new Date('2026-10-12T11:30:00Z'))).toBeCloseTo(22.5, 5);
+    // ...and not in June (UTC+10)
+    expect(cityHour('Australia/Melbourne', new Date('2026-06-12T11:30:00Z'))).toBeCloseTo(21.5, 5);
+  });
+
+  it('maps any city’s day onto the sky’s reference day', () => {
+    // Melbourne summer: sunrise 5:58, sunset 20:45
+    expect(solarHour(5.97, 5.97, 20.75)).toBeCloseTo(REF_SUNRISE, 5);
+    expect(solarHour(20.75, 5.97, 20.75)).toBeCloseTo(REF_SUNSET, 5);
+    const mid = solarHour((5.97 + 20.75) / 2, 5.97, 20.75);
+    expect(mid).toBeCloseTo((REF_SUNRISE + REF_SUNSET) / 2, 5);
+    // 2 am is still the middle of the night, and the result always stays within 0–24
+    const night = solarHour(2, 5.97, 20.75);
+    expect(night).toBeGreaterThanOrEqual(0);
+    expect(night < REF_SUNRISE - 1.5 || night > REF_SUNSET + 1.5).toBe(true);
+    // KL's own day maps (almost) to itself
+    expect(solarHour(13, REF_SUNRISE, REF_SUNSET)).toBeCloseTo(13, 5);
   });
 
   it('formats hours for people', () => {
@@ -72,9 +91,18 @@ describe('weather parsing', () => {
     expect(w.aqi).toBeNull(); // air quality failed → no crash
   });
 
-  it('has a sensible demo fallback', () => {
-    const d = demoWeather();
-    expect(d.source).toBe('demo');
-    expect(d.next12).toHaveLength(12);
+  it('has a sensible demo fallback for every city', () => {
+    for (const c of CITIES) {
+      const d = demoWeather(c);
+      expect(d.source).toBe('demo');
+      expect(d.next12).toHaveLength(12);
+    }
+    expect(demoWeather(cityById('melbourne')!).current.temp).toBeLessThan(demoWeather(cityById('kl')!).current.temp + 1);
+  });
+
+  it('looks cities up safely', () => {
+    expect(cityById('melbourne')?.tz).toBe('Australia/Melbourne');
+    expect(cityById('narnia')).toBeUndefined();
+    expect(cityById(null)).toBeUndefined();
   });
 });

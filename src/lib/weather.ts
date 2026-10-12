@@ -1,10 +1,9 @@
 /**
- * Live KL weather + air quality from Open-Meteo (free, no API key).
+ * Live weather + air quality from Open-Meteo (free, no API key).
  * https://open-meteo.com — data is CC BY 4.0, so the app shows a credit link.
  */
-import { isoToHour, klHour } from './time';
-
-export const KL = { lat: 3.139, lon: 101.6869 };
+import type { City } from './cities';
+import { cityHour, isoToHour } from './time';
 
 export interface HourForecast {
   hour: number; // 0–23
@@ -35,13 +34,13 @@ interface AirResponse {
   current?: { us_aqi?: number | null; pm2_5?: number | null };
 }
 
-const params = `latitude=${KL.lat}&longitude=${KL.lon}&timezone=Asia%2FKuala_Lumpur`;
-export const FORECAST_URL =
-  `https://api.open-meteo.com/v1/forecast?${params}` +
+const params = (c: City) => `latitude=${c.lat}&longitude=${c.lon}&timezone=${encodeURIComponent(c.tz)}`;
+export const forecastUrl = (c: City) =>
+  `https://api.open-meteo.com/v1/forecast?${params(c)}` +
   '&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m' +
   '&hourly=temperature_2m,weather_code,precipitation_probability' +
   '&daily=sunrise,sunset,uv_index_max&forecast_days=2';
-export const AIR_URL = `https://air-quality-api.open-meteo.com/v1/air-quality?${params}&current=us_aqi,pm2_5`;
+export const airUrl = (c: City) => `https://air-quality-api.open-meteo.com/v1/air-quality?${params(c)}&current=us_aqi,pm2_5`;
 
 /** Turn the two API responses into our tidy Weather object. Pure, so it's unit tested. */
 export function parseWeather(f: ForecastResponse, a: AirResponse | null, now = Date.now()): Weather {
@@ -76,35 +75,40 @@ export function parseWeather(f: ForecastResponse, a: AirResponse | null, now = D
   };
 }
 
-/** A believable KL day, used if the weather service can't be reached (offline, blocked…). */
-export function demoWeather(now = Date.now()): Weather {
-  const h0 = Math.floor(klHour(new Date(now)));
-  const codeAt = (h: number) => (h >= 15 && h <= 17 ? 95 : h >= 13 && h < 15 ? 3 : h === 18 ? 61 : h >= 19 || h < 7 ? 2 : 1);
-  const tempAt = (h: number) => Math.round(25 + 7 * Math.max(0, Math.sin(((h - 7) / 12) * Math.PI)));
-  const rainAt = (h: number) => (h >= 14 && h <= 18 ? 60 + (h % 3) * 10 : 10 + (h % 4) * 5);
+/** A believable day for the city, used if the weather service can't be reached (offline, blocked…). */
+export function demoWeather(city: City, now = Date.now()): Weather {
+  const h0 = Math.floor(cityHour(city.tz, new Date(now)));
+  const melb = city.id === 'melbourne';
+  // KL: hot, humid, afternoon thunderstorms. Melbourne: mild, breezy, a passing shower or two.
+  const [lo, hi, sunrise, sunset] = melb ? [11, 20, 6.55, 19.7] : [25, 32, 7.05, 19.13];
+  const codeAt = melb
+    ? (h: number) => (h === 11 || h === 12 ? 80 : h >= 13 && h <= 16 ? 2 : h >= 20 || h < 6 ? 3 : 1)
+    : (h: number) => (h >= 15 && h <= 17 ? 95 : h >= 13 && h < 15 ? 3 : h === 18 ? 61 : h >= 19 || h < 7 ? 2 : 1);
+  const tempAt = (h: number) => Math.round(lo + (hi - lo) * Math.max(0, Math.sin(((h - sunrise) / (sunset - sunrise)) * Math.PI)));
+  const rainAt = (h: number) => ([80, 61, 95].includes(codeAt(h)) ? 55 + (h % 3) * 10 : 5 + (h % 4) * 5);
   return {
     source: 'demo',
     fetchedAt: now,
-    current: { temp: tempAt(h0), feels: tempAt(h0) + 4, humidity: 75, wind: 8, code: codeAt(h0) },
+    current: { temp: tempAt(h0), feels: tempAt(h0) + (melb ? -2 : 4), humidity: melb ? 62 : 75, wind: melb ? 19 : 8, code: codeAt(h0) },
     next12: Array.from({ length: 12 }, (_, i) => {
       const h = (h0 + i) % 24;
       return { hour: h, code: codeAt(h), temp: tempAt(h), rainChance: rainAt(h) };
     }),
-    sunrise: 7.05,
-    sunset: 19.13,
-    uvMax: 11,
-    aqi: 58,
-    pm25: 16,
+    sunrise,
+    sunset,
+    uvMax: melb ? 7 : 11,
+    aqi: melb ? 24 : 58,
+    pm25: melb ? 6 : 16,
   };
 }
 
 // ---------- fetching, with a 10-minute cache so refreshes don't hammer the API ----------
-const CACHE_KEY = 'kl-now:weather:v1';
+const cacheKey = (c: City) => `kl-now:weather:v2:${c.id}`;
 export const CACHE_MS = 10 * 60 * 1000;
 
-function readCache(): Weather | null {
+function readCache(city: City): Weather | null {
   try {
-    const raw = localStorage.getItem(CACHE_KEY);
+    const raw = localStorage.getItem(cacheKey(city));
     if (!raw) return null;
     const w = JSON.parse(raw) as Weather;
     return Date.now() - w.fetchedAt < CACHE_MS ? w : null;
@@ -119,21 +123,21 @@ async function getJson<T>(url: string, signal: AbortSignal): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export async function loadWeather({ force = false } = {}): Promise<Weather> {
+export async function loadWeather(city: City, { force = false } = {}): Promise<Weather> {
   if (!force) {
-    const cached = readCache();
+    const cached = readCache(city);
     if (cached) return cached;
   }
   const ctrl = new AbortController();
   const timeout = setTimeout(() => ctrl.abort(), 10_000);
   try {
     const [forecast, air] = await Promise.all([
-      getJson<ForecastResponse>(FORECAST_URL, ctrl.signal),
-      getJson<AirResponse>(AIR_URL, ctrl.signal).catch(() => null), // air quality is a nice-to-have
+      getJson<ForecastResponse>(forecastUrl(city), ctrl.signal),
+      getJson<AirResponse>(airUrl(city), ctrl.signal).catch(() => null), // air quality is a nice-to-have
     ]);
     const w = parseWeather(forecast, air);
     try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify(w));
+      localStorage.setItem(cacheKey(city), JSON.stringify(w));
     } catch {
       /* storage blocked: fine, just no cache */
     }

@@ -4,11 +4,13 @@
  * Drawn on a <canvas> with requestAnimationFrame; pauses when the tab is hidden.
  */
 import type { SkyKind } from '../lib/conditions';
-import { Skyline, TALLEST } from './skyline';
+import type { City } from '../lib/cities';
+import { solarHour } from '../lib/time';
+import { Skyline } from './skyline';
 
 type RGB = [number, number, number];
 
-/** Sky colour stops through the day: [hour, top colour, horizon colour] */
+/** Sky colour stops through a KL-shaped day: [hour, top colour, horizon colour]. Other cities are mapped onto this with solarHour(). */
 const STOPS: [number, string, string][] = [
   [0, '#0b1026', '#1b2350'], [5.5, '#141b3d', '#3b2f63'], [6.7, '#f59e9b', '#fcd8a8'], [8, '#7cc4f2', '#cfeaff'],
   [12, '#4aa3e8', '#bfe3ff'], [17.5, '#5fa9e0', '#ffd9a0'], [19, '#f0786a', '#ffb877'], [19.8, '#3a2a63', '#b05a7a'],
@@ -39,12 +41,19 @@ export function skyColors(hour: number, kind: SkyKind): { top: RGB; bottom: RGB 
   return { top, bottom };
 }
 
-export interface Scene { hour: number; kind: SkyKind }
+export interface Scene {
+  city: City['id'];
+  hour: number; // local time in the city
+  sunrise: number; // local, decimal hours
+  sunset: number;
+  kind: SkyKind;
+}
 
 export function createSky(canvas: HTMLCanvasElement, getScene: () => Scene) {
   const ctx = canvas.getContext('2d')!;
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const skyline = new Skyline();
+  let cityId: City['id'] = getScene().city;
   let W = 0, H = 0, k = 1, t = 0, raf = 0, flash = 0;
   let bolt: [number, number][] | null = null;
   const mouse = { x: NaN };
@@ -61,11 +70,11 @@ export function createSky(canvas: HTMLCanvasElement, getScene: () => Scene) {
     canvas.height = H * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     // tallest tower takes up to ~42% of the screen height
-    k = Math.max(0.45, Math.min(1.05, W / 1350, (H * 0.42) / TALLEST));
+    skyline.layout(W, cityId);
+    k = Math.max(0.45, Math.min(1.05, W / 1350, (H * 0.42) / skyline.tallest));
     stars = Array.from({ length: Math.round((W * H) / 4500) }, () => ({ x: rand(0, W), y: rand(0, H * 0.7), r: rand(0.3, 1.3), ph: rand(0, 6.3) }));
     clouds = Array.from({ length: 12 }, () => ({ x: rand(-200, W), y: rand(20, H * 0.45), s: rand(0.6, 1.5) * Math.min(1, W / 1000), v: rand(0.06, 0.22) }));
     drops = Array.from({ length: Math.round(Math.min(380, (W * H) / 3500)) }, () => ({ x: rand(0, W), y: rand(0, H), l: rand(10, 22), v: rand(9, 15) }));
-    skyline.layout(W);
   }
 
   function makeBolt() {
@@ -77,7 +86,11 @@ export function createSky(canvas: HTMLCanvasElement, getScene: () => Scene) {
 
   function frame() {
     t += 0.016;
-    const { hour: h, kind } = getScene();
+    const scene = getScene();
+    if (scene.city !== cityId) { cityId = scene.city; resize(); }
+    const kind = scene.kind;
+    // map the city's local time onto the sky's reference day, so sunset colours happen at the real sunset
+    const h = solarHour(scene.hour, scene.sunrise, scene.sunset);
     const cover = CLOUD_COVER[kind];
     const { top, bottom } = skyColors(h, kind);
 

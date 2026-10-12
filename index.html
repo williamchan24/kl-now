@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0b1026" />
-    <meta name="description" content="Kuala Lumpur right now: live time, weather, rain forecast, sunset and air quality, over a sky that matches the real thing." />
+    <meta name="description" content="Kuala Lumpur and Melbourne right now: live time, weather, rain forecast, sunset and air quality, over a sky and skyline that match the real thing." />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <title>KL Now</title>
   </head>
@@ -13,15 +13,18 @@
 
     <main class="app">
       <header class="top">
-        <h1 class="brand">KL <span>Now</span></h1>
-        <button class="pill-btn glass" id="refresh" type="button" aria-label="Refresh weather">↻ <span id="updated">Loading…</span></button>
+        <h1 class="brand"><span id="brand-city">KL</span> <span class="now">Now</span></h1>
+        <div class="top-right">
+          <div class="cities glass" id="cities" role="group" aria-label="City"></div>
+          <button class="pill-btn glass" id="refresh" type="button" aria-label="Refresh weather">↻ <span id="updated">Loading…</span></button>
+        </div>
       </header>
 
       <p class="banner glass" id="banner" hidden></p>
 
       <div class="grid">
         <section class="hero glass" aria-label="Current conditions">
-          <div class="place">📍 Kuala Lumpur</div>
+          <div class="place">📍 <span id="place">Kuala Lumpur</span></div>
           <div class="clock" id="clock" aria-live="off">--:--</div>
           <div class="date" id="date"></div>
           <div class="current">
@@ -30,6 +33,7 @@
               <div class="temp" id="temp">--°</div>
               <div class="cond" id="cond">Loading weather…</div>
               <div class="muted" id="feels"></div>
+              <div class="quirk" id="quirk" hidden></div>
             </div>
           </div>
           <div class="stats">

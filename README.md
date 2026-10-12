@@ -1,12 +1,14 @@
 # KL Now 🌆
 
-Kuala Lumpur, right now. Live time, weather, the next 12 hours of rain, sunrise and sunset, and air quality, all over a sky that matches the real thing.
+Kuala Lumpur (and Melbourne 🇦🇺), right now. Live time, weather, the next 12 hours of rain, sunrise and sunset, and air quality, all over a sky that matches the real thing.
 
 **Live:** https://williamchan24.github.io/kl-now/
 
 ## Features
 - **A live sky** drawn on a canvas. It follows the actual time in KL (sunrise, blue sky, golden sunset, stars and moon) and the actual weather (clouds, rain, thunderstorms with lightning, haze).
-- **The KL skyline** along the bottom: Merdeka 118, The Exchange 106, the Petronas Twin Towers and KL Tower. Blue-grey by day, black silhouettes at sunset, lit-up windows and blinking tower lights at night, plus a little parallax depth on desktop.
+- **Two cities:** switch between 🇲🇾 KL and 🇦🇺 Melbourne at the top. Each has its own time zone, weather and skyline, and your choice is remembered (or link straight to one with `?city=melbourne`).
+- **The KL skyline** along the bottom: Merdeka 118, The Exchange 106, the Petronas Twin Towers and KL Tower. Blue-grey by day, black silhouettes at sunset, lit-up windows and blinking tower lights at night, plus a little parallax depth on desktop. **Melbourne** gets the Arts Centre spire, Rialto, Flinders Street Station (with its lit-up roofline at night), Eureka Tower's gold crown and Australia 108.
+- Melbourne bonus: when the forecast swings wildly, it admits it's *four seasons in one day*.
 - **Glass cards** showing:
   - current temperature and "feels like" (it's always hotter than it says 🥵)
   - humidity, wind and UV index
@@ -21,7 +23,8 @@ Kuala Lumpur, right now. Live time, weather, the next 12 hours of rain, sunrise 
 
 ## How it works
 - **Data:** [Open-Meteo](https://open-meteo.com/) forecast + air quality APIs. They're free, with no API key, so there's no backend. Responses are cached in `localStorage` for 10 minutes, and the app refreshes in the background and when you come back to the tab.
-- **Time:** everything uses `Intl.DateTimeFormat` with `Asia/Kuala_Lumpur`, so someone opening it in London still sees KL's time and sky.
+- **Time:** everything uses `Intl.DateTimeFormat` with the city's time zone (`Asia/Kuala_Lumpur`, `Australia/Melbourne`, including daylight saving), so someone in London still sees each city's own time and sky.
+- **Different day lengths:** the sky colours are designed around KL's ~12-hour day. `solarHour()` maps any city's local time onto that day using the real sunrise and sunset, so Melbourne's sky turns golden at *its* sunset, whether that's 5:10 pm in winter or 8:45 pm in summer.
 - **Sky:** `src/sky/sky.ts` blends colour stops through the day, greys them out by cloud cover, then layers stars, sun or moon, clouds, the skyline, rain and lightning. `requestAnimationFrame` pauses when the tab is hidden, and the canvas resolution is capped at 2× to keep phones smooth.
 - **Skyline:** `src/sky/skyline.ts` draws the landmarks from simple polygons in "units", scaled to the screen. A seeded random generator places the filler buildings and windows, so the city looks the same on every visit.
 - **Tested:** time zones, weather-code mapping, API parsing (including midnight rollover and missing air-quality data) and sky colours (`npm test`).
@@ -44,9 +47,10 @@ src/
 ├── style.css          glass UI
 ├── lib/weather.ts     fetch + parse Open-Meteo, cache, sample-day fallback
 ├── lib/conditions.ts  weather codes → sky look, labels, icons; AQI + UV bands
-├── lib/time.ts        KL time helpers
+├── lib/cities.ts      the cities (name, time zone, coordinates)
+├── lib/time.ts        time zone helpers + solarHour()
 ├── sky/sky.ts         the animated sky + weather effects
-└── sky/skyline.ts     the KL skyline
+└── sky/skyline.ts     the KL + Melbourne skylines
 ```
 
 Weather data by [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0).
