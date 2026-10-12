@@ -1,9 +1,15 @@
 import './style.css';
+import { polyfillCountryFlagEmojis } from 'country-flag-emoji-polyfill';
+import flagFontUrl from 'country-flag-emoji-polyfill/dist/TwemojiCountryFlags.woff2?url';
 import { createSky } from './sky/sky';
 import { aqiBand, iconFor, kindFromCode, labelFromCode, labelFromKind, SKY_KINDS, uvLabel, type SkyKind } from './lib/conditions';
 import { CITIES, cityById, type City } from './lib/cities';
 import { CACHE_MS, demoWeather, loadWeather, type Weather } from './lib/weather';
 import { cityHour, formatDuration, formatHour, shortHour } from './lib/time';
+
+// Windows has no flag emojis (🇲🇾 shows up as "MY"), so load a small flag font there.
+// Other systems already have flags and skip the download.
+polyfillCountryFlagEmojis('Twemoji Country Flags', flagFontUrl);
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const el = (tag: string, cls: string, text?: string) => {

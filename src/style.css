@@ -12,7 +12,7 @@ html, body { margin: 0; min-height: 100%; }
 body {
   background: #0b1026; /* shows for a split second before the sky draws */
   color: var(--text);
-  font: 16px/1.5 ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font: 16px/1.5 'Twemoji Country Flags', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   overflow-x: hidden;
 }
 a { color: inherit; }
